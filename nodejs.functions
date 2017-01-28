@@ -1,0 +1,175 @@
+# This file is part of libertine linux's package curl. It is subject to the license terms in the COPYRIGHT file found in the top-level directory of this distribution and at https://raw.githubusercontent.com/libertine-linux-packages/curl/master/COPYRIGHT. No part of libertine linux's package curl, including this file, may be copied, modified, propagated, or distributed except according to the terms contained in the COPYRIGHT file.
+# Copyright © 2016 The developers of libertine linux's package curl. See the COPYRIGHT file in the top-level directory of this distribution and at https://raw.githubusercontent.com/libertine-linux-packages/curl/master/COPYRIGHT.
+
+
+variant=nodejs_6
+
+depends build_ccache
+build_needs ccache
+
+depends build_python_2_7
+build_needs python2.7
+
+depends build_gnumake
+build_needs make
+
+depends build_busybox
+build_needs ln sh env printf grep sed dirname find xargs touch
+
+build_provides node npm
+
+case "$package" in
+	
+	build_nodejs_6)
+		depends build_musl_cross_make_build
+		build_needs "$libertine_build"-cc "$libertine_build"-ar "$libertine_build"-ld "$libertine_build"-ranlib "$libertine_build"-c++
+		
+		build_needs sed touch cat
+		libertine_compile_build_nodejs_6()
+		{
+			local isForBuild='true'
+			
+			if $isForBuild; then
+				local target="$libertine_build"
+				local destinationCpu="$libertine_buildNodeJsCpu"
+				local destinationOperatingSystem="$libertine_buildOperatingSystem"
+				local destinationFloatAbi="$libertine_buildFloatAbi"
+				local destinationFpuMode="$libertine_buildFpuMode"
+				local destinationMipsArchitectureVariant="$libertine_buildMipsArchitectureVariant"
+				local prefix="$(libertine_public_outputBuildSysrootPath)"/usr
+				local destdir=''
+			else
+				local target="$libertine_host"
+				local destinationCpu="$libertine_hostNodeJsCpu"
+				local destinationOperatingSystem="$libertine_hostOperatingSystem"
+				local destinationFloatAbi="$libertine_hostFloatAbi"
+				local destinationFpuMode="$libertine_hostFpuMode"
+				local destinationMipsArchitectureVariant="$libertine_hostMipsArchitectureVariant"
+				local prefix='/usr'
+				local destdir="$(libertine_public_outputHostSysrootPath)"
+			fi
+						
+			pushd "$(libertine_public_sourcePath)"
+				
+				ln -s python2.7 "$(libertine_public_buildNeedsPath)"/python
+				
+				sed -i -e 's;cross_compiling = target_arch != host_arch;cross_compiling = True;g' configure
+				
+				
+				set -- \
+					--prefix="$prefix" \
+					--dest-cpu="$destinationCpu" \
+					--dest-os="$destinationOperatingSystem" \
+					--fully-static \
+					--release-urlbase='https://nodejs.org/download/release/' \
+					--without-dtrace \
+					--without-etw \
+					--without-perfctr \
+					--without-ssl \
+					--without-inspector \
+					--with-intl=small-icu \
+					--with-icu-locales=root,en \
+					--without-snapshot
+				
+					# Issues with linking
+					# --without-intl
+					
+				case "$destinationCpu" in
+					
+					arm)
+						set -- "$@" --with-arm-float-abi="$destinationFloatAbi" --with-arm-fpu="$destinationFpuMode"
+					;;
+					
+					mips|mipsel)
+						set -- "$@" --with-mips-float-abi="$destinationFloatAbi" --with-mips-fpu-mode="$destinationFpuMode" --with-mips-arch-variant="$destinationMipsArchitectureVariant"
+					;;
+					
+				esac
+				
+				if $isForBuild; then
+					local target="$libertine_build"
+				else
+					local target="$libertine_host"
+				fi
+				
+				GYP_CROSSCOMPILE=1 \
+				CC_host="$libertine_build-cc" \
+				CC="$libertine_build-cc" \
+				CXX="$target-c++" \
+				AR="$target"-ar \
+				LINK="$target-c++" \
+				RANLIB="$target"-ranlib \
+				./configure "$@"
+				
+				# For some weird reason, $(LDFLAGS_host) isn't present in LDFLAGS.host ?= 
+				if $isForBuild; then
+					sed -i \
+						-e 's;^CC\.host ?=.*$;CC.host ?='"$libertine_build"-cc';g' \
+						-e 's;^CXX\.host ?=.*$;CXX.host ?='"$libertine_build"-c++';g' \
+						-e 's;^LINK\.host ?=.*$;LINK.host ?='"$libertine_build"-c++';g' \
+						-e 's;^AR\.host ?=.*$;AR.host ?='"$libertine_build"-ar';g' \
+						-e 's;^CC\.target ?=.*$;CC.target ?='"$libertine_build"-cc';g' \
+						-e 's;^CXX\.target ?=.*$;CXX.target ?='"$libertine_build"-c++';g' \
+						-e 's;^LINK\.target ?=.*$;LINK.target ?='"$libertine_build"-c++';g' \
+						-e 's;^AR\.target ?=.*$;AR.target ?='"$libertine_build"-ar';g' \
+						out/Makefile
+					
+					# sed -i \
+					# 	-e 's;^CFLAGS\.host ?=;CFLAGS.host ?='"$(libertine_public_buildCCompilerFlags)"' ;g' \
+					# 	-e 's;^CXXFLAGS\.host ?=;CXXFLAGS.host ?='"$(libertine_public_buildCxxCompilerFlags)"' ;g' \
+					# 	-e 's;^LDFLAGS\.host ?=;LDFLAGS.host ?='"$(libertine_public_buildCxxCompilerFlags)"' $(LDFLAGS_host);g' \
+					# 	-e 's;^CFLAGS\.target ?=;CFLAGS.target ?='"$(libertine_public_buildCCompilerFlags)"' ;g' \
+					# 	-e 's;^CXXFLAGS\.target ?=;CXXFLAGS.target ?='"$(libertine_public_buildCxxCompilerFlags)"' ;g' \
+					# 	-e 's;^LDFLAGS\.target ?=;LDFLAGS.target ?='"$(libertine_public_buildCxxCompilerFlags)"';g' \
+					# 	out/Makefile
+					
+					# ? LINK ?=
+				else
+					sed -i \
+						-e 's;^CC\.host ?=.*$;CC.host ?='"$libertine_build"-cc';g' \
+						-e 's;^CXX\.host ?=.*$;CXX.host ?='"$libertine_build"-c++';g' \
+						-e 's;^LINK\.host ?=.*$;LINK.host ?='"$libertine_build"-c++';g' \
+						-e 's;^AR\.host ?=.*$;AR.host ?='"$libertine_build"-ar';g' \
+						-e 's;^CC\.target ?=.*$;CC.target ?='"$libertine_host"-cc';g' \
+						-e 's;^CXX\.target ?=.*$;CXX.target ?='"$libertine_host"-c++';g' \
+						-e 's;^LINK\.target ?=.*$;LINK.target ?='"$libertine_host"-c++';g' \
+						-e 's;^AR\.target ?=.*$;AR.target ?='"$libertine_host"-ar';g' \
+						out/Makefile
+					
+					# sed -i \
+					# 	-e 's;^CFLAGS\.host ?=;CFLAGS.host ?='"$(libertine_public_buildCCompilerFlags)"' ;g' \
+					# 	-e 's;^CXXFLAGS\.host ?=;CXXFLAGS.host ?='"$(libertine_public_buildCxxCompilerFlags)"' ;g' \
+					# 	-e 's;^LDFLAGS\.host ?=;LDFLAGS.host ?='"$(libertine_public_buildCxxCompilerFlags)"' $(LDFLAGS_host);g' \
+					# 	-e 's;^CFLAGS\.target ?=;CFLAGS.target ?='"$(libertine_public_hostCCompilerFlags)"' ;g' \
+					# 	-e 's;^CXXFLAGS\.target ?=;CXXFLAGS.target ?='"$(libertine_public_hostCxxCompilerFlags)"' ;g' \
+					# 	-e 's;^LDFLAGS\.target ?=;LDFLAGS.target ?='"$(libertine_public_hostCxxCompilerFlags)"';g' \
+					# 	out/Makefile
+				fi
+				
+				libertine_public_make DESTDIR="$destdir"
+				
+				libertine_public_make DESTDIR="$destdir" install
+				
+				# node Seg fault in #0  0x00000000008f47f5 in v8::internal::RegExpResultsCache::Clear(v8::internal::FixedArray*) ()
+				
+			popd
+		}
+	
+	;;
+	
+	nodejs_6)
+		depends build_musl_cross_make_host
+		build_needs "$libertine_host"-cc "$libertine_host"-ar "$libertine_host"-ld "$libertine_host"-ranlib "$libertine_host"-strip
+		
+		depends build_paxctl
+		build_needs paxctl
+
+		libertine_compile_nodejs_6()
+		{
+			printf 'Not supported yet\n' 1>&2
+			exit 99
+		}
+	;;
+	
+esac
+
