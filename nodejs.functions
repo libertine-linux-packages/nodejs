@@ -16,6 +16,9 @@ build_needs make
 depends build_busybox
 build_needs ln sh env printf grep sed dirname find xargs touch
 
+depends build_paxctl
+build_needs paxctl
+
 build_provides node npm
 
 case "$package" in
@@ -24,7 +27,7 @@ case "$package" in
 		depends build_musl_cross_make_build
 		build_needs "$libertine_build"-cc "$libertine_build"-ar "$libertine_build"-ld "$libertine_build"-ranlib "$libertine_build"-c++
 		
-		build_needs sed touch cat
+		build_needs sed touch cat mkdir cp ln
 		libertine_compile_build_nodejs_6()
 		{
 			local isForBuild='true'
@@ -113,7 +116,7 @@ case "$package" in
 						-e 's;^LINK\.target ?=.*$;LINK.target ?='"$libertine_build"-c++';g' \
 						-e 's;^AR\.target ?=.*$;AR.target ?='"$libertine_build"-ar';g' \
 						out/Makefile
-					
+						
 					# sed -i \
 					# 	-e 's;^CFLAGS\.host ?=;CFLAGS.host ?='"$(libertine_public_buildCCompilerFlags)"' ;g' \
 					# 	-e 's;^CXXFLAGS\.host ?=;CXXFLAGS.host ?='"$(libertine_public_buildCxxCompilerFlags)"' ;g' \
@@ -122,8 +125,6 @@ case "$package" in
 					# 	-e 's;^CXXFLAGS\.target ?=;CXXFLAGS.target ?='"$(libertine_public_buildCxxCompilerFlags)"' ;g' \
 					# 	-e 's;^LDFLAGS\.target ?=;LDFLAGS.target ?='"$(libertine_public_buildCxxCompilerFlags)"';g' \
 					# 	out/Makefile
-					
-					# ? LINK ?=
 				else
 					sed -i \
 						-e 's;^CC\.host ?=.*$;CC.host ?='"$libertine_build"-cc';g' \
@@ -136,21 +137,34 @@ case "$package" in
 						-e 's;^AR\.target ?=.*$;AR.target ?='"$libertine_host"-ar';g' \
 						out/Makefile
 					
-					# sed -i \
-					# 	-e 's;^CFLAGS\.host ?=;CFLAGS.host ?='"$(libertine_public_buildCCompilerFlags)"' ;g' \
-					# 	-e 's;^CXXFLAGS\.host ?=;CXXFLAGS.host ?='"$(libertine_public_buildCxxCompilerFlags)"' ;g' \
-					# 	-e 's;^LDFLAGS\.host ?=;LDFLAGS.host ?='"$(libertine_public_buildCxxCompilerFlags)"' $(LDFLAGS_host);g' \
-					# 	-e 's;^CFLAGS\.target ?=;CFLAGS.target ?='"$(libertine_public_hostCCompilerFlags)"' ;g' \
-					# 	-e 's;^CXXFLAGS\.target ?=;CXXFLAGS.target ?='"$(libertine_public_hostCxxCompilerFlags)"' ;g' \
-					# 	-e 's;^LDFLAGS\.target ?=;LDFLAGS.target ?='"$(libertine_public_hostCxxCompilerFlags)"';g' \
-					# 	out/Makefile
+					sed -i \
+						-e 's;^CFLAGS\.host ?=;CFLAGS.host ?='"$(libertine_public_buildCCompilerFlags)"' ;g' \
+						-e 's;^CXXFLAGS\.host ?=;CXXFLAGS.host ?='"$(libertine_public_buildCxxCompilerFlags)"' ;g' \
+						-e 's;^LDFLAGS\.host ?=;LDFLAGS.host ?='"$(libertine_public_buildCxxCompilerFlags)"' $(LDFLAGS_host);g' \
+						-e 's;^CFLAGS\.target ?=;CFLAGS.target ?='"$(libertine_public_hostCCompilerFlags)"' ;g' \
+						-e 's;^CXXFLAGS\.target ?=;CXXFLAGS.target ?='"$(libertine_public_hostCxxCompilerFlags)"' ;g' \
+						-e 's;^LDFLAGS\.target ?=;LDFLAGS.target ?='"$(libertine_public_hostCxxCompilerFlags)"';g' \
+						out/Makefile
 				fi
 				
 				libertine_public_make DESTDIR="$destdir"
 				
 				libertine_public_make DESTDIR="$destdir" install
 				
-				# node Seg fault in #0  0x00000000008f47f5 in v8::internal::RegExpResultsCache::Clear(v8::internal::FixedArray*) ()
+				local paxFlags='m'
+				if $isForBuild; then
+					libertine_public_secureBinary "$(libertine_public_outputBuildSysrootPath)"/usr/bin/node "$paxFlags"
+				else
+					libertine_public_stripAndSecureBinary "$(libertine_public_outputHostSysrootPath)"/usr/bin/node "$paxFlags"
+					
+					local outputFolderPath="$(libertine_public_outputInitramfsPath)"/usr
+					
+					mkdir -m 0755 -p "$outputFolderPath" "$outputFolderPath"/bin "$outputFolderPath"/lib/node_modules
+					
+					cp "$(libertine_public_outputHostSysrootPath)"/usr/bin/node "$outputFolderPath"/bin
+					
+					# We do not install npm
+				fi
 				
 			popd
 		}
@@ -160,9 +174,6 @@ case "$package" in
 	nodejs_6)
 		depends build_musl_cross_make_host
 		build_needs "$libertine_host"-cc "$libertine_host"-ar "$libertine_host"-ld "$libertine_host"-ranlib "$libertine_host"-strip
-		
-		depends build_paxctl
-		build_needs paxctl
 
 		libertine_compile_nodejs_6()
 		{
