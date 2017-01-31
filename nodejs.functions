@@ -68,7 +68,6 @@ case "$package" in
 					--without-dtrace \
 					--without-etw \
 					--without-perfctr \
-					--without-ssl \
 					--without-inspector \
 					--with-intl=small-icu \
 					--with-icu-locales=root,en \
