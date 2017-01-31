@@ -63,7 +63,6 @@ case "$package" in
 					--prefix="$prefix" \
 					--dest-cpu="$destinationCpu" \
 					--dest-os="$destinationOperatingSystem" \
-					--fully-static \
 					--release-urlbase='https://nodejs.org/download/release/' \
 					--without-dtrace \
 					--without-etw \
@@ -72,9 +71,6 @@ case "$package" in
 					--with-intl=small-icu \
 					--with-icu-locales=root,en \
 					--without-snapshot
-				
-					# Issues with linking
-					# --without-intl
 					
 				case "$destinationCpu" in
 					
@@ -90,8 +86,10 @@ case "$package" in
 				
 				if $isForBuild; then
 					local target="$libertine_build"
+					#set -- "$@" --partly-static
 				else
 					local target="$libertine_host"
+					#set -- "$@" --fully-static
 				fi
 				
 				GYP_CROSSCOMPILE=1 \
@@ -102,6 +100,12 @@ case "$package" in
 				LINK="$target-c++" \
 				RANLIB="$target"-ranlib \
 				./configure "$@"
+				
+				# We have to strip out these flags
+				local buildCCompilerFlags="$(libertine_public_buildCCompilerFlags -static --static -Wl,-Bstatic -static-libgcc)"
+				local buildCxxCompilerFlags="$(libertine_public_buildCxxCompilerFlags -static --static -Wl,-Bstatic -static-libgcc -static-libstdc++)"
+				local hostCCompilerFlags="$(libertine_public_hostCCompilerFlags -static --static -Wl,-Bstatic -static-libgcc)"
+				local hostCxxCompilerFlags="$(libertine_public_hostCxxCompilerFlags -static --static -Wl,-Bstatic -static-libgcc -static-libstdc++)"
 				
 				# For some weird reason, $(LDFLAGS_host) isn't present in LDFLAGS.host ?= 
 				if $isForBuild; then
@@ -117,12 +121,12 @@ case "$package" in
 						out/Makefile
 						
 					# sed -i \
-					# 	-e 's;^CFLAGS\.host ?=;CFLAGS.host ?='"$(libertine_public_buildCCompilerFlags)"' ;g' \
-					# 	-e 's;^CXXFLAGS\.host ?=;CXXFLAGS.host ?='"$(libertine_public_buildCxxCompilerFlags)"' ;g' \
-					# 	-e 's;^LDFLAGS\.host ?=;LDFLAGS.host ?='"$(libertine_public_buildCxxCompilerFlags)"' $(LDFLAGS_host);g' \
-					# 	-e 's;^CFLAGS\.target ?=;CFLAGS.target ?='"$(libertine_public_buildCCompilerFlags)"' ;g' \
-					# 	-e 's;^CXXFLAGS\.target ?=;CXXFLAGS.target ?='"$(libertine_public_buildCxxCompilerFlags)"' ;g' \
-					# 	-e 's;^LDFLAGS\.target ?=;LDFLAGS.target ?='"$(libertine_public_buildCxxCompilerFlags)"';g' \
+					# 	-e 's;^CFLAGS\.host ?=;CFLAGS.host ?='"$(buildCCompilerFlags)"' ;g' \
+					# 	-e 's;^CXXFLAGS\.host ?=;CXXFLAGS.host ?='"$(buildCxxCompilerFlags)"' ;g' \
+					# 	-e 's;^LDFLAGS\.host ?=;LDFLAGS.host ?='"$(buildCxxCompilerFlags)"' $(LDFLAGS_host);g' \
+					# 	-e 's;^CFLAGS\.target ?=;CFLAGS.target ?='"$(buildCCompilerFlags)"' ;g' \
+					# 	-e 's;^CXXFLAGS\.target ?=;CXXFLAGS.target ?='"$(buildCxxCompilerFlags)"' ;g' \
+					# 	-e 's;^LDFLAGS\.target ?=;LDFLAGS.target ?='"$(buildCxxCompilerFlags)"';g' \
 					# 	out/Makefile
 				else
 					sed -i \
@@ -137,12 +141,12 @@ case "$package" in
 						out/Makefile
 					
 					sed -i \
-						-e 's;^CFLAGS\.host ?=;CFLAGS.host ?='"$(libertine_public_buildCCompilerFlags)"' ;g' \
-						-e 's;^CXXFLAGS\.host ?=;CXXFLAGS.host ?='"$(libertine_public_buildCxxCompilerFlags)"' ;g' \
-						-e 's;^LDFLAGS\.host ?=;LDFLAGS.host ?='"$(libertine_public_buildCxxCompilerFlags)"' $(LDFLAGS_host);g' \
-						-e 's;^CFLAGS\.target ?=;CFLAGS.target ?='"$(libertine_public_hostCCompilerFlags)"' ;g' \
-						-e 's;^CXXFLAGS\.target ?=;CXXFLAGS.target ?='"$(libertine_public_hostCxxCompilerFlags)"' ;g' \
-						-e 's;^LDFLAGS\.target ?=;LDFLAGS.target ?='"$(libertine_public_hostCxxCompilerFlags)"';g' \
+						-e 's;^CFLAGS\.host ?=;CFLAGS.host ?='"$(buildCCompilerFlags)"' ;g' \
+						-e 's;^CXXFLAGS\.host ?=;CXXFLAGS.host ?='"$(buildCxxCompilerFlags)"' ;g' \
+						-e 's;^LDFLAGS\.host ?=;LDFLAGS.host ?='"$(buildCxxCompilerFlags)"' $(LDFLAGS_host);g' \
+						-e 's;^CFLAGS\.target ?=;CFLAGS.target ?='"$(hostCCompilerFlags)"' ;g' \
+						-e 's;^CXXFLAGS\.target ?=;CXXFLAGS.target ?='"$(hostCxxCompilerFlags)"' ;g' \
+						-e 's;^LDFLAGS\.target ?=;LDFLAGS.target ?='"$(hostCxxCompilerFlags)"';g' \
 						out/Makefile
 				fi
 				
@@ -154,15 +158,14 @@ case "$package" in
 				if $isForBuild; then
 					libertine_public_secureBinary "$(libertine_public_outputBuildSysrootPath)"/usr/bin/node "$paxFlags"
 				else
-					libertine_public_stripAndSecureBinary "$(libertine_public_outputHostSysrootPath)"/usr/bin/node "$paxFlags"
-					
 					local outputFolderPath="$(libertine_public_outputInitramfsPath)"/usr
 					
 					mkdir -m 0755 -p "$outputFolderPath" "$outputFolderPath"/bin "$outputFolderPath"/lib/node_modules
 					
 					cp "$(libertine_public_outputHostSysrootPath)"/usr/bin/node "$outputFolderPath"/bin
-					
-					# We do not install npm
+					cp "$(libertine_public_outputHostSysrootPath)"/usr/bin/npm "$outputFolderPath"/bin
+
+					libertine_public_stripAndSecureBinary "$outputFolderPath"/bin/node "$paxFlags"
 				fi
 				
 			popd
