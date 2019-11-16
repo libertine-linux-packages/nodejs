@@ -1,4 +1,5 @@
 [submodule "nodejs_6"]
 	path = nodejs_6
-	url = https://github.com/nodejs/node.git
+	url = https://github.com/libertine-linux-clones/nodejs_6.git
 	branch = v6.x
+	libertine-linux-upstream = https://github.com/nodejs/node.git
