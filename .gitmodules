@@ -1,6 +1,6 @@
 [submodule "nodejs_6"]
 	path = nodejs_6
-	url = https://github.com/libertine-linux-clones/nodejs_6.git
+	url = https://github.com/libertine-linux-clones/nodejs.git
 	branch = v6.x
 	update = checkout
 	ignore = none
